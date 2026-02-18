@@ -16,6 +16,7 @@ class CellState(Enum):
     PIT = 3
     TELEPORT = 4
     CONFUSION = 5
+    HAZARD = 6
     def __repr__(self):
         return self.name[0]
 
@@ -23,6 +24,7 @@ class CellState(Enum):
 class SampleResult:
     wall_below: bool
     wall_right: bool
+    state: CellState = CellState.EMPTY
 
 class MazeCell:
     right_square: Optional[MazeCell] = None
@@ -33,15 +35,19 @@ class MazeCell:
 
     def __repr__(self) -> str:
         output = ""
-        print("str called")
+        letter = ('E', 'E̲')
+        if (self.state == CellState.GOAL):
+            letter = ('G', 'G̲')
+        elif (self.state == CellState.START):
+            letter = ('S', 'S̲')
         if self.left_square is None:
             output += "|"
         else:
             output += " "
         if self.bottom_square is None:
-            output += "E̲"
+            output += letter[1]
         else:
-            output += "E"
+            output += letter[0]
         if self.right_square is None:
             output += "|"
         else:
@@ -66,11 +72,16 @@ def sample_point(pos: tuple[int, int], image: ImageFile) -> SampleResult:
 
     right_wall_pos = (image_point[0] + 15, image_point[1] + 7)
     bottom_wall_pos = (image_point[0] + 7, image_point[1] + 15)
+    center_pos = (image_point[0] + 7, image_point[1] + 7)
 
     # if we sample black, that means there's a wall.
 
     sample_result.wall_below = image.getpixel(bottom_wall_pos) == (0, 0, 0, 255)
     sample_result.wall_right = image.getpixel(right_wall_pos) == (0, 0, 0, 255)
+
+    middle_color = image.getpixel(center_pos)
+    if middle_color == (247, 118, 55, 255):
+        sample_result.state = CellState.HAZARD
 
 
     return sample_result
@@ -95,16 +106,34 @@ def load_image_into_graph(image_src: Path) -> list[list[MazeCell]]:
         while row <= 63:
             col = 0
             while col <= 63:
-                cell_wall_info = sample_point((col, row), img)
-                if cell_wall_info.wall_below and loaded_map[row][col].bottom_square is not None:
+                sample_info = sample_point((col, row), img)
+                loaded_map[row][col].state = sample_info.state
+                if sample_info.wall_below and loaded_map[row][col].bottom_square is not None:
                     loaded_map[row][col].bottom_square.top_square = None
                     loaded_map[row][col].bottom_square = None
-                if cell_wall_info.wall_right and loaded_map[row][col].right_square is not None:
+                if sample_info.wall_right and loaded_map[row][col].right_square is not None:
                     loaded_map[row][col].right_square.left_square = None
                     loaded_map[row][col].right_square = None
                 
                 col += 1
             row += 1
+        
+        # find exit
+        for i in range(64):
+            grid_spot = convert_grid_point_to_image_point((i, 0))
+            grid_spot = (grid_spot[0] + 1, grid_spot[1])
+            if img.getpixel(grid_spot) == (255, 255, 255, 255):
+                print(f"found goal at {grid_spot}")
+                loaded_map[0][i].state = CellState.GOAL
+                break
+        
+        for i in range(64):
+            grid_spot = convert_grid_point_to_image_point((i, 63))
+            grid_spot = (grid_spot[0] + 1, grid_spot[1] + 15)
+            if img.getpixel(grid_spot) == (255, 255, 255, 255):
+                print(f"found start at {grid_spot}")
+                loaded_map[63][i].state = CellState.START
+                break
 
     return loaded_map
 
