@@ -8,6 +8,9 @@ import numpy as np
 from numpy import array # only used for pretty-printing the matrix :)
 import sys
 
+HAZARD_COLOR = (247, 118, 55)
+CONFUSION_COLOR = (156, 117, 60)
+CONFUSION_COLOR_2 = (199, 154, 65)
 
 class CellState(Enum):
     EMPTY = 0
@@ -55,7 +58,8 @@ class MazeCell:
         return output
             
 
-
+def color_distance(c1, c2):
+    return ((c1[0]-c2[0])**2 + (c1[1]-c2[1])**2 + (c1[2]-c2[2])**2) ** 0.5
 
 def convert_grid_point_to_image_point(grid_point: tuple[int, int]) -> tuple[int, int]:
     """Returns the top left position in image space of the given grid space coordinate."""
@@ -75,19 +79,30 @@ def sample_point(pos: tuple[int, int], image: ImageFile) -> SampleResult:
     center_pos = (image_point[0] + 7, image_point[1] + 7)
 
     # if we sample black, that means there's a wall.
+    # except NOT because for SOME REASON, THE EMOJIS ON THE MAZE
+    # CAN AFFECT THE COLOR OF THE WALLS???
+    # ????
+    # WHO MADE THESE IMAGES???
+    # ts pmo sm icl 💔
 
-    sample_result.wall_below = image.getpixel(bottom_wall_pos) == (0, 0, 0, 255)
-    sample_result.wall_right = image.getpixel(right_wall_pos) == (0, 0, 0, 255)
+    bottom_r, bottom_g, bottom_b = image.getpixel(bottom_wall_pos)
+    sample_result.wall_below = max(bottom_r, bottom_g, bottom_b) < 255//4
+    right_r, right_g, right_b = image.getpixel(right_wall_pos)
+    sample_result.wall_right = max(right_r, right_g, right_b) < 255//4
 
     middle_color = image.getpixel(center_pos)
-    if middle_color == (247, 118, 55, 255):
+    
+    if color_distance(middle_color[:3], HAZARD_COLOR) < 50:
         sample_result.state = CellState.HAZARD
-
+    elif color_distance(middle_color[:3], CONFUSION_COLOR) < 50:
+        sample_result.state = CellState.CONFUSION
+    elif color_distance(middle_color[:3], CONFUSION_COLOR_2) < 50:
+        sample_result.state = CellState.CONFUSION
 
     return sample_result
 
 def load_image_into_graph(image_src: Path) -> list[list[MazeCell]]:
-    loaded_map: list[list[MazeCell]] = [[MazeCell() for i in range(64)] for j in range(64)]
+    loaded_map: list[list[MazeCell]] = [[MazeCell() for _ in range(64)] for _ in range(64)]
 
     for i, row in enumerate(loaded_map):
         for j, maze_cell in enumerate(row):
@@ -122,7 +137,8 @@ def load_image_into_graph(image_src: Path) -> list[list[MazeCell]]:
         for i in range(64):
             grid_spot = convert_grid_point_to_image_point((i, 0))
             grid_spot = (grid_spot[0] + 1, grid_spot[1])
-            if img.getpixel(grid_spot) == (255, 255, 255, 255):
+            grid_r, grid_g, grid_b = img.getpixel(grid_spot)
+            if max(grid_r, grid_g, grid_b) >= 255 * 4 // 5:
                 print(f"found goal at {grid_spot}")
                 loaded_map[0][i].state = CellState.GOAL
                 break
@@ -130,7 +146,8 @@ def load_image_into_graph(image_src: Path) -> list[list[MazeCell]]:
         for i in range(64):
             grid_spot = convert_grid_point_to_image_point((i, 63))
             grid_spot = (grid_spot[0] + 1, grid_spot[1] + 15)
-            if img.getpixel(grid_spot) == (255, 255, 255, 255):
+            grid_r, grid_g, grid_b = img.getpixel(grid_spot)
+            if max(grid_r, grid_g, grid_b) >= 255 * 4 // 5:
                 print(f"found start at {grid_spot}")
                 loaded_map[63][i].state = CellState.START
                 break
@@ -138,7 +155,7 @@ def load_image_into_graph(image_src: Path) -> list[list[MazeCell]]:
     return loaded_map
 
 if __name__ == "__main__":
-    loaded_map = load_image_into_graph(Path("MAZE_0.png"))
+    loaded_map = load_image_into_graph(Path("MAZE_1.png"))
     np.set_printoptions(threshold=sys.maxsize, linewidth=1000)
     print(array(loaded_map))
     print(len(loaded_map))

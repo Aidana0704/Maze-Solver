@@ -5,6 +5,7 @@ __pycache__/
 *.pyd
 *.pyo
 *.swp
+.vscode/
 
 # Distributions and packaging
 .Python
