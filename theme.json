@@ -1,0 +1,11 @@
+{
+  "panel": {
+    "colours": {
+      "dark_bg": "#ffffff"
+    },
+    "misc": {
+      "border_width": "2",
+      "shadow_width": "2"
+    }
+  }
+}

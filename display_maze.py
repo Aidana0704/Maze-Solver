@@ -1,7 +1,9 @@
 from pygame import Color
 import pygame
 from load_image import MazeCell, convert_grid_point_to_image_point, load_image_into_graph, CellState
-from solve_maze import get_start_and_goal_pos, solve_maze_astar, AStarSolver
+from solve_maze import AStarSolver, manhattan_distance
+import pygame_gui
+from pygame_gui.elements import UIPanel, UILabel
 
 BACKGROUND_COLOR = Color(255, 255, 255)
 WALL_COLOR = Color(0, 0, 0)
@@ -27,6 +29,9 @@ little_guy_col: int = 0
 
 LITTLE_GUY = pygame.image.load("lil_guy.png")
 FLAME_HAZARD = pygame.image.load("flame_hazard.png")
+PURPLE_TELEPORT = pygame.image.load("purple_teleport.png")
+GREEN_TELEPORT = pygame.image.load("green_teleport.png")
+YELLOW_TELEPORT = pygame.image.load("yellow_teleport.png")
 
 camera_x: int = 0
 camera_y: int = 0
@@ -36,7 +41,41 @@ pygame.init()
 screen = pygame.display.set_mode((800, 800))
 pygame.display.set_caption("Maze Solver")
 
+manager = pygame_gui.UIManager((800, 800), 'theme.json')
+
 running = True
+
+
+ui_frame = UIPanel(relative_rect=pygame.Rect(575, 11, 218, 218),
+                        manager=manager)
+
+paused_text = UILabel(relative_rect=pygame.Rect(10, 10, 200, 20),
+                        text="Paused?: ",
+                        manager=manager,
+                        container=ui_frame)
+
+turn_count_text = UILabel(relative_rect=pygame.Rect(10, 30, 200, 20),
+                            text="# of Turns: ",
+                            manager=manager,
+                            container=ui_frame)
+
+manhattan_distance_text = UILabel(relative_rect=pygame.Rect(10, 50, 200, 20),
+                                    text="Manhattan Distance: ",
+                                    manager=manager,
+                                    container=ui_frame)
+
+cost_text = UILabel(relative_rect=pygame.Rect(10, 70, 200, 20),
+                    text="Cost: ",
+                    manager=manager,
+                    container=ui_frame)
+    
+def draw_ui(solver: AStarSolver, paused: bool):
+    paused_text.set_text(f"Paused?: {"true" if paused else "false"}")
+    turn_count_text.set_text(f"# of Turns: {solver.turn_count}")
+    manhattan_distance_text.set_text(f"Manhattan Distance: {manhattan_distance(solver.character_position, solver.goal_pos)}")
+    cost_text.set_text(f"Cost: {solver.current_node.cost}")
+
+
 
 def draw_maze(maze: list[list[MazeCell]]):
     border = [(1, 0), (1, 1025), (1025, 1025), (1025, 0)]
@@ -61,11 +100,15 @@ def draw_maze(maze: list[list[MazeCell]]):
                 screen.blit(FLAME_HAZARD, (cell_x, cell_y))
             elif cell.state == CellState.CONFUSION:
                 pygame.draw.rect(screen, CONFUSION_COLOR, pygame.Rect(cell_x, cell_y, 16, 16))
+            elif cell.state == CellState.GREEN_TELEPORT:
+                screen.blit(GREEN_TELEPORT, (cell_x, cell_y))
+            elif cell.state == CellState.PURPLE_TELEPORT:
+                screen.blit(PURPLE_TELEPORT, (cell_x, cell_y))
+            elif cell.state == CellState.YELLOW_TELEPORT:
+                screen.blit(YELLOW_TELEPORT, (cell_x, cell_y))
     
     for wall in walls:
         pygame.draw.line(screen, WALL_COLOR, (wall[0], wall[1]), (wall[2], wall[3]), 2)
-
-    pygame.display.flip()
 
 def color_cells(cells, color):
     for grid_point in cells:
@@ -92,10 +135,14 @@ if __name__ == "__main__":
     running = True
     clock = pygame.time.Clock()
 
-    paused = False
+    paused = True
 
     while running:
+        time_delta = clock.tick(FRAMES_PER_SECOND) // 1000.0
+
         for event in pygame.event.get():
+            manager.process_events(event)
+            
             if event.type == pygame.QUIT:
                 running = False
             if event.type == TICK_EVENT:
@@ -108,7 +155,16 @@ if __name__ == "__main__":
                     paused = not paused
                 
                 if event.key == pygame.K_t and paused:
-                    solver.step()
+                   solver.step()
+                elif event.key == pygame.K_RIGHT:
+                    solver.move_right()
+                elif event.key == pygame.K_UP:
+                    solver.move_up()
+                elif event.key == pygame.K_DOWN:
+                    solver.move_down()
+                elif event.key == pygame.K_LEFT:
+                    solver.move_left()
+                
             
         keys = pygame.key.get_pressed()
         if keys[pygame.K_w]:
@@ -120,7 +176,7 @@ if __name__ == "__main__":
         if keys[pygame.K_d]:
             camera_x += CAM_SPEED_PX_PER_FRAME
 
-        clock.tick(FRAMES_PER_SECOND)
+        
         screen.fill(BACKGROUND_COLOR)
 
         # draw_path(solution_path)
@@ -130,5 +186,9 @@ if __name__ == "__main__":
         draw_little_guy(solver.character_position)
         
         draw_maze(maze_graph)
-    
+        draw_ui(solver, paused)
+        manager.update(time_delta)
+        manager.draw_ui(screen)
+        pygame.display.flip()
+
     pygame.quit()

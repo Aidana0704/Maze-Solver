@@ -11,15 +11,23 @@ import sys
 HAZARD_COLOR = (247, 118, 55)
 CONFUSION_COLOR = (156, 117, 60)
 CONFUSION_COLOR_2 = (199, 154, 65)
+YELLOW_TELEPORT_COLOR = (255, 111, 56)
+YELLOW_TELEPORT_COLOR_2 = (240, 192, 76)
+PURPLE_TELEPORT_COLOR = (135, 105, 193)
+PURPLE_TELEPORT_COLOR_2 = (143, 101, 227)
+GREEN_TELEPORT_COLOR = (91, 220, 148)
+GREEN_TELEPORT_COLOR_2 = (65, 158, 112)
 
 class CellState(Enum):
     EMPTY = 0
     START = 1
     GOAL = 2
     PIT = 3
-    TELEPORT = 4
+    PURPLE_TELEPORT = 4
     CONFUSION = 5
     HAZARD = 6
+    GREEN_TELEPORT = 7
+    YELLOW_TELEPORT = 8
     def __repr__(self):
         return self.name[0]
 
@@ -35,6 +43,7 @@ class MazeCell:
     top_square: Optional[MazeCell] = None
     bottom_square: Optional[MazeCell] = None
     state: CellState = CellState.EMPTY
+    position: tuple[int, int] = (0, 0)  # (x, y) i.e. (col, row)
 
     def __repr__(self) -> str:
         output = ""
@@ -77,6 +86,7 @@ def sample_point(pos: tuple[int, int], image: ImageFile) -> SampleResult:
     right_wall_pos = (image_point[0] + 15, image_point[1] + 7)
     bottom_wall_pos = (image_point[0] + 7, image_point[1] + 15)
     center_pos = (image_point[0] + 7, image_point[1] + 7)
+    teleporter_color_pos = (image_point[0], image_point[1] + 7)
 
     # if we sample black, that means there's a wall.
     # except NOT because for SOME REASON, THE EMOJIS ON THE MAZE
@@ -91,6 +101,7 @@ def sample_point(pos: tuple[int, int], image: ImageFile) -> SampleResult:
     sample_result.wall_right = max(right_r, right_g, right_b) < 255//4
 
     middle_color = image.getpixel(center_pos)
+    teleport_color = image.getpixel(teleporter_color_pos)
     
     if color_distance(middle_color[:3], HAZARD_COLOR) < 50:
         sample_result.state = CellState.HAZARD
@@ -98,6 +109,18 @@ def sample_point(pos: tuple[int, int], image: ImageFile) -> SampleResult:
         sample_result.state = CellState.CONFUSION
     elif color_distance(middle_color[:3], CONFUSION_COLOR_2) < 50:
         sample_result.state = CellState.CONFUSION
+    elif color_distance(teleport_color[:3], YELLOW_TELEPORT_COLOR) < 50:
+        sample_result.state = CellState.YELLOW_TELEPORT
+    elif color_distance(middle_color[:3], YELLOW_TELEPORT_COLOR_2) < 50:
+        sample_result.state = CellState.YELLOW_TELEPORT
+    elif color_distance(middle_color[:3], PURPLE_TELEPORT_COLOR) < 50:
+        sample_result.state = CellState.PURPLE_TELEPORT
+    elif color_distance(middle_color[:3], PURPLE_TELEPORT_COLOR_2) < 50:
+        sample_result.state = CellState.PURPLE_TELEPORT
+    elif color_distance(middle_color[:3], GREEN_TELEPORT_COLOR) < 50:
+        sample_result.state = CellState.GREEN_TELEPORT
+    elif color_distance(teleport_color[:3], GREEN_TELEPORT_COLOR_2) < 50:
+        sample_result.state = CellState.GREEN_TELEPORT
 
     return sample_result
 
@@ -106,6 +129,7 @@ def load_image_into_graph(image_src: Path) -> list[list[MazeCell]]:
 
     for i, row in enumerate(loaded_map):
         for j, maze_cell in enumerate(row):
+            maze_cell.position = (j, i)  # (x, y) = (col, row)
             if j > 0:
                 maze_cell.left_square = row[j - 1]
             if j < len(row) - 1:
@@ -151,6 +175,22 @@ def load_image_into_graph(image_src: Path) -> list[list[MazeCell]]:
                 print(f"found start at {grid_spot}")
                 loaded_map[63][i].state = CellState.START
                 break
+
+    teleport_colors = [CellState.PURPLE_TELEPORT, CellState.GREEN_TELEPORT, CellState.YELLOW_TELEPORT]
+    for color in teleport_colors:
+        pair = [cell for row in loaded_map for cell in row if cell.state == color]
+        a, b = pair[0], pair[1]
+        for _, dst, neighbors in [(a, b, [(a.right_square, 'left_square'),
+                                            (a.left_square,  'right_square'),
+                                            (a.top_square,   'bottom_square'),
+                                            (a.bottom_square,'top_square')]),
+                                    (b, a, [(b.right_square, 'left_square'),
+                                            (b.left_square,  'right_square'),
+                                            (b.top_square,   'bottom_square'),
+                                            (b.bottom_square,'top_square')])]:
+            for neighbor, back_attr in neighbors:
+                if neighbor is not None:
+                    setattr(neighbor, back_attr, dst)
 
     return loaded_map
 
