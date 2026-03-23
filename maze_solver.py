@@ -76,6 +76,7 @@ class MazeEnvironment:
 
 _MAZE_FILES = {
     'training': 'MAZE_0.png',
+    'manual_hazards': 'MAZE_1.png',
     'testing':  'MAZE_0.png',
 }
 
@@ -415,3 +416,18 @@ class AStarAgent(Agent):
 
 
         self.plan_state = AStarAgentPlanningState.START
+
+class ManualMovementAgent(Agent):
+    @override
+    def __init__(self):
+        self.memory: set[CellPosition] = {}
+        self.next_action: Action
+
+    @override
+    def plan_turn(self, _):
+        ans = self.next_action
+        self.next_action = Action.WAIT
+        return [ans]
+    
+    def set_action(self, action: Action):
+        self.next_action = action

@@ -1,7 +1,7 @@
 from pygame import Color
 import pygame
 from load_image import MazeCell, convert_grid_point_to_image_point, CellState
-from maze_solver import AStarAgent, AStarMazeEnvironment, TurnResult
+from maze_solver import AStarAgent, AStarMazeEnvironment, TurnResult, ManualMovementAgent, Agent, Action
 from solve_maze import get_start_and_goal_pos
 import pygame_gui
 from pygame_gui.elements import UIPanel, UILabel
@@ -125,8 +125,11 @@ def start_new_episode(env: AStarMazeEnvironment, agent: AStarAgent, episodes: li
 
 
 if __name__ == "__main__":
-    agent = AStarAgent()
-    env = AStarMazeEnvironment('training')
+    # agent = AStarAgent(
+    hazard_testing: bool = True
+    agent: Agent = ManualMovementAgent() if hazard_testing else AStarAgent
+    mmAgent: ManualMovementAgent | None = agent if hazard_testing else None 
+    env = AStarMazeEnvironment("manual_hazards" if hazard_testing else "training")
 
     start_pos = env.reset()
     last_result = TurnResult()
@@ -154,6 +157,9 @@ if __name__ == "__main__":
                 for _ in range(STEPS_PER_TICK):
                     if not paused:
                         actions = agent.plan_turn(last_result)
+                        if hazard_testing and actions == [Action.WAIT]:
+                            continue
+
                         last_result = env.step(actions)
                         step_count += 1
                         if last_result.is_goal_reached or step_count >= MAX_STEPS_PER_EPISODE:
@@ -170,6 +176,17 @@ if __name__ == "__main__":
                     if last_result.is_goal_reached or step_count >= MAX_STEPS_PER_EPISODE:
                         last_result, step_count = start_new_episode(env, agent, episodes)
                         episode_count += 1
+                if hazard_testing:
+                    assert(mmAgent is not None)
+                    if event.key == pygame.K_RIGHT:
+                        mmAgent.set_action(Action.MOVE_RIGHT)
+                    elif event.key == pygame.K_LEFT:
+                        mmAgent.set_action(Action.MOVE_LEFT)
+                    elif event.key == pygame.K_UP:
+                        mmAgent.set_action(Action.MOVE_UP)
+                    elif event.key == pygame.K_DOWN:
+                        mmAgent.set_action(Action.MOVE_DOWN)
+                    
 
         keys = pygame.key.get_pressed()
         if keys[pygame.K_w]:
@@ -184,12 +201,15 @@ if __name__ == "__main__":
         screen.fill(BACKGROUND_COLOR)
 
         expanded = [pos for pos, cell in agent.memory.items() if cell.fully_expanded]
-        color_cells(expanded, VISITED_COLOR)
-        color_cells([cell.pos for cell in agent.open_queue], OPEN_QUEUE_COLOR)
-        color_cells(agent.current_path, TRAVERSING_COLOR)
+        if not hazard_testing:
+            color_cells(expanded, VISITED_COLOR)
+            color_cells([cell.pos for cell in agent.open_queue], OPEN_QUEUE_COLOR)
+            color_cells(agent.current_path, TRAVERSING_COLOR)
         draw_little_guy(last_result.current_position)
         draw_maze(env._graph)
-        draw_ui(agent, paused, episode_count, step_count)
+
+        if not hazard_testing:
+            draw_ui(agent, paused, episode_count, step_count)
         manager.update(time_delta)
         manager.draw_ui(screen)
         pygame.display.flip()
