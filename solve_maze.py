@@ -219,3 +219,6 @@ class AStarSolver:
             heappush(self.queue, CellAStarInfo(current_node_cell.left_square, current_node.cost + 1, current_node_cell.left_square.position, current_node))
         if current_node_cell.top_square is not None:
             heappush(self.queue, CellAStarInfo(current_node_cell.top_square, current_node.cost + 1, current_node_cell.top_square.position, current_node))
+
+
+

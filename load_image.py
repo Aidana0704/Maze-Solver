@@ -95,6 +95,7 @@ def sample_point(pos: tuple[int, int], image: ImageFile) -> SampleResult:
     # WHO MADE THESE IMAGES???
     # ts pmo sm icl 💔
 
+    print(image.getpixel(bottom_wall_pos))
     bottom_r, bottom_g, bottom_b = image.getpixel(bottom_wall_pos)
     sample_result.wall_below = max(bottom_r, bottom_g, bottom_b) < 255//4
     right_r, right_g, right_b = image.getpixel(right_wall_pos)
@@ -139,7 +140,7 @@ def load_image_into_graph(image_src: Path) -> list[list[MazeCell]]:
             if i < len(loaded_map) - 1:
                 maze_cell.bottom_square = loaded_map[i + 1][j]
 
-    with Image.open(image_src) as img:
+    with Image.open(image_src).convert("RGB") as img:
         # Sample image at specific discrete points
         row = 0
         while row <= 63:
@@ -179,6 +180,9 @@ def load_image_into_graph(image_src: Path) -> list[list[MazeCell]]:
     teleport_colors = [CellState.PURPLE_TELEPORT, CellState.GREEN_TELEPORT, CellState.YELLOW_TELEPORT]
     for color in teleport_colors:
         pair = [cell for row in loaded_map for cell in row if cell.state == color]
+        if len(pair) == 0:
+            continue
+
         a, b = pair[0], pair[1]
         for _, dst, neighbors in [(a, b, [(a.right_square, 'left_square'),
                                             (a.left_square,  'right_square'),
@@ -195,7 +199,7 @@ def load_image_into_graph(image_src: Path) -> list[list[MazeCell]]:
     return loaded_map
 
 if __name__ == "__main__":
-    loaded_map = load_image_into_graph(Path("MAZE_1.png"))
+    loaded_map = load_image_into_graph(Path("MAZE_0.png"))
     np.set_printoptions(threshold=sys.maxsize, linewidth=1000)
     print(array(loaded_map))
     print(len(loaded_map))
