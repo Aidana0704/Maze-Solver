@@ -11,8 +11,8 @@ import sys
 HAZARD_COLOR = (247, 118, 55)
 CONFUSION_COLOR = (156, 117, 60)
 CONFUSION_COLOR_2 = (199, 154, 65)
-YELLOW_TELEPORT_COLOR = (255, 111, 56)
-YELLOW_TELEPORT_COLOR_2 = (240, 192, 76)
+# YELLOW_TELEPORT_COLOR = (255, 111, 56)
+# YELLOW_TELEPORT_COLOR_2 = (240, 192, 76)
 PURPLE_TELEPORT_COLOR = (135, 105, 193)
 PURPLE_TELEPORT_COLOR_2 = (143, 101, 227)
 GREEN_TELEPORT_COLOR = (91, 220, 148)
@@ -110,10 +110,10 @@ def sample_point(pos: tuple[int, int], image: ImageFile) -> SampleResult:
         sample_result.state = CellState.CONFUSION
     elif color_distance(middle_color[:3], CONFUSION_COLOR_2) < 50:
         sample_result.state = CellState.CONFUSION
-    elif color_distance(teleport_color[:3], YELLOW_TELEPORT_COLOR) < 50:
-        sample_result.state = CellState.YELLOW_TELEPORT
-    elif color_distance(middle_color[:3], YELLOW_TELEPORT_COLOR_2) < 50:
-        sample_result.state = CellState.YELLOW_TELEPORT
+    # elif color_distance(teleport_color[:3], YELLOW_TELEPORT_COLOR) < 50:
+    #     sample_result.state = CellState.YELLOW_TELEPORT
+    # elif color_distance(middle_color[:3], YELLOW_TELEPORT_COLOR_2) < 50:
+    #     sample_result.state = CellState.YELLOW_TELEPORT
     elif color_distance(middle_color[:3], PURPLE_TELEPORT_COLOR) < 50:
         sample_result.state = CellState.PURPLE_TELEPORT
     elif color_distance(middle_color[:3], PURPLE_TELEPORT_COLOR_2) < 50:
