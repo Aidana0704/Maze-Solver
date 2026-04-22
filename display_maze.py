@@ -44,43 +44,159 @@ screen = pygame.display.set_mode((800, 800))
 pygame.display.set_caption("Maze Solver")
 manager = pygame_gui.UIManager((800, 800), 'theme.json')
 
-ui_frame = UIPanel(relative_rect=pygame.Rect(575, 11, 218, 218), manager=manager)
+# ── Debug panel ──────────────────────────────────────────────────────────────
+# Sits on the right side of the screen.  Height covers all debug sections.
+_PANEL_X = 575
+_PANEL_W = 218
+_PANEL_H = 560
+ui_frame = UIPanel(relative_rect=pygame.Rect(_PANEL_X, 11, _PANEL_W, _PANEL_H),
+                   manager=manager)
 
-paused_text = UILabel(relative_rect=pygame.Rect(10, 10, 200, 20),
-                      text="Paused?: ",
-                      manager=manager, container=ui_frame)
-
-episode_text = UILabel(relative_rect=pygame.Rect(10, 30, 200, 20),
-                       text="Episode: ",
-                       manager=manager, container=ui_frame)
-
-steps_text = UILabel(relative_rect=pygame.Rect(10, 50, 200, 20),
-                     text="Steps: ",
-                     manager=manager, container=ui_frame)
-
-explored_text = UILabel(relative_rect=pygame.Rect(10, 70, 200, 20),
-                        text="Cells explored: ",
-                        manager=manager, container=ui_frame)
-
-expansion_state_text = UILabel(relative_rect=pygame.Rect(10, 90, 200, 20),
-                               text="Expansion state: ",
-                               manager=manager, container=ui_frame)
+_LBL_W = 200  # label width inside the panel
+_LBL_H = 17   # label height
 
 
-def draw_ui(agent: AStarAgent, paused: bool, episode_count: int, step_count: int):
-    paused_text.set_text(f"Paused?: {'true' if paused else 'false'}")
-    episode_text.set_text(f"Episode: {episode_count}")
-    steps_text.set_text(f"Steps: {step_count} / {MAX_STEPS_PER_EPISODE}")
-    explored_text.set_text(f"Cells explored: {len(agent.memory)}")
-    expansion_state_text.set_text(f"Expansion: {agent.expansion_state.name}")
+def _lbl(y: int, text: str = "") -> UILabel:
+    return UILabel(relative_rect=pygame.Rect(8, y, _LBL_W, _LBL_H),
+                   text=text, manager=manager, container=ui_frame)
+
+
+def _sec(y: int, title: str) -> UILabel:
+    """Static section-header label (never updated)."""
+    lbl = UILabel(relative_rect=pygame.Rect(8, y, _LBL_W, _LBL_H),
+                  text=f"── {title} ──",
+                  manager=manager, container=ui_frame)
+    return lbl
+
+
+# ── GENERAL section ──────────────────────────────────────────────────────────
+_sec(4, "GENERAL")
+_lbl_paused     = _lbl(22)
+_lbl_episode    = _lbl(40)
+_lbl_steps      = _lbl(58)
+_lbl_memory     = _lbl(76)
+_lbl_queue      = _lbl(94)
+
+# ── PLANNING section ─────────────────────────────────────────────────────────
+_sec(116, "PLANNING")
+_lbl_plan_state  = _lbl(134)
+_lbl_exp_state   = _lbl(152)
+_lbl_expanding   = _lbl(170)
+_lbl_path        = _lbl(188)
+
+# ── LAST RESULT section ──────────────────────────────────────────────────────
+_sec(210, "LAST RESULT")
+_lbl_res_pos     = _lbl(228)
+_lbl_res_hits    = _lbl(246)
+_lbl_res_flags   = _lbl(264)
+_lbl_actions     = _lbl(282)
+
+# ── TELEPORT section ─────────────────────────────────────────────────────────
+_sec(304, "TELEPORT")
+_lbl_tele_origin = _lbl(322)
+_lbl_tele_tried  = _lbl(340)
+_lbl_tele_exit   = _lbl(358)
+_lbl_tele_step   = _lbl(376)
+
+# ── FIRE section ─────────────────────────────────────────────────────────────
+_sec(398, "FIRE")
+_lbl_fire_ctr    = _lbl(416)
+_lbl_fire_dir    = _lbl(434)
+_lbl_fire_flags  = _lbl(452)
+
+# ── RECOVERY section ─────────────────────────────────────────────────────────
+_sec(474, "RECOVERY")
+_lbl_rec_path    = _lbl(492)
+_lbl_rec_dir     = _lbl(510)
+_lbl_rec_flags   = _lbl(528)
+
+
+def _yn(b: bool) -> str:
+    return "Y" if b else "N"
+
+
+def _pos(p) -> str:
+    if p is None:
+        return "None"
+    return f"({p[0]},{p[1]})" if not hasattr(p, 'x') else f"({p.x},{p.y})"
+
+
+def _act(a) -> str:
+    if a is None:
+        return "None"
+    name_map = {
+        Action.MOVE_UP: "UP", Action.MOVE_DOWN: "DN",
+        Action.MOVE_LEFT: "LT", Action.MOVE_RIGHT: "RT",
+        Action.WAIT: "WT",
+    }
+    return name_map.get(a, str(a))
+
+
+def draw_ui(agent: AStarAgent, last_result: TurnResult, last_actions: list[Action],
+            paused: bool, episode_count: int, step_count: int):
+    # ── GENERAL ──────────────────────────────────────────────────────────────
+    _lbl_paused.set_text(f"Paused: {'Y' if paused else 'N'}")
+    _lbl_episode.set_text(f"Episode: {episode_count}")
+    _lbl_steps.set_text(f"Steps: {step_count}/{MAX_STEPS_PER_EPISODE}")
+    _lbl_memory.set_text(f"Memory: {len(agent.memory)} cells")
+    _lbl_queue.set_text(f"Open queue: {len(agent.open_queue)}")
+
+    # ── PLANNING ─────────────────────────────────────────────────────────────
+    _lbl_plan_state.set_text(f"Plan: {agent.plan_state.name}")
+    _lbl_exp_state.set_text(f"Expand: {agent.expansion_state.name}")
+    exp_pos = _pos(agent.expanding_cell.pos) if agent.expanding_cell else "None"
+    _lbl_expanding.set_text(f"Cell: {exp_pos}")
+    _lbl_path.set_text(f"Path len: {len(agent.current_path)}")
+
+    # ── LAST RESULT ───────────────────────────────────────────────────────────
+    _lbl_res_pos.set_text(f"Pos: {_pos(last_result.current_position)}")
+    _lbl_res_hits.set_text(
+        f"Walls: {last_result.wall_hits}  "
+        f"Acts: {last_result.actions_executed}")
+    _lbl_res_flags.set_text(
+        f"dead={_yn(last_result.is_dead)} "
+        f"conf={_yn(last_result.is_confused)} "
+        f"tele={_yn(last_result.teleported)} "
+        f"goal={_yn(last_result.is_goal_reached)}")
+    _lbl_actions.set_text("Acts: " + " ".join(_act(a) for a in last_actions))
+
+    # ── TELEPORT ─────────────────────────────────────────────────────────────
+    orig = agent._teleport_origin_dir.name if agent._teleport_origin_dir else "None"
+    _lbl_tele_origin.set_text(f"Origin dir: {orig}")
+    _lbl_tele_tried.set_text(f"Exit tried: {agent._teleport_exit_tried}/4")
+    _lbl_tele_exit.set_text(f"Last exit: {_act(agent._teleport_last_exit)}")
+    _lbl_tele_step.set_text(f"Stepping back: {_yn(agent._teleport_stepping_back)}")
+
+    # ── FIRE ─────────────────────────────────────────────────────────────────
+    _lbl_fire_ctr.set_text(
+        f"Counter: {agent.fire_counter}  "
+        f"Known: {len(agent.fire_map)}")
+    chk_dir = agent._fire_check_direction.name if agent._fire_check_direction else "None"
+    _lbl_fire_dir.set_text(f"Check dir: {chk_dir}")
+    _lbl_fire_flags.set_text(
+        f"pending={_yn(agent._fire_check_pending)}  "
+        f"skip={_yn(agent._skip_fire_recheck)}")
+
+    # ── RECOVERY ─────────────────────────────────────────────────────────────
+    _lbl_rec_path.set_text(f"Path len: {len(agent._recovery_path)}")
+    nxt = _pos(agent._recovery_path[1]) if len(agent._recovery_path) > 1 else "—"
+    _lbl_rec_dir.set_text(f"Next step: {nxt}")
+    dst = _pos(agent._recovery_path[-1]) if agent._recovery_path else "—"
+    _lbl_rec_flags.set_text(f"Dest: {dst}")
 
 
 def draw_rl_ui(agent, paused: bool, episode_count: int, step_count: int):
-    paused_text.set_text(f"Paused?: {'true' if paused else 'false'}")
-    episode_text.set_text(f"Episode: {episode_count}")
-    steps_text.set_text(f"Steps: {step_count} / {MAX_STEPS_PER_EPISODE}")
-    explored_text.set_text(f"Cells visited: {len(agent._episode_visited)}")
-    expansion_state_text.set_text(f"Epsilon: {agent.epsilon:.4f}")
+    _lbl_paused.set_text(f"Paused: {'Y' if paused else 'N'}")
+    _lbl_episode.set_text(f"Episode: {episode_count}")
+    _lbl_steps.set_text(f"Steps: {step_count}/{MAX_STEPS_PER_EPISODE}")
+    _lbl_memory.set_text(f"Visited: {len(agent._episode_visited)}")
+    _lbl_queue.set_text(f"Epsilon: {agent.epsilon:.4f}")
+    for lbl in (_lbl_plan_state, _lbl_exp_state, _lbl_expanding, _lbl_path,
+                _lbl_res_pos, _lbl_res_hits, _lbl_res_flags, _lbl_actions,
+                _lbl_tele_origin, _lbl_tele_tried, _lbl_tele_exit, _lbl_tele_step,
+                _lbl_fire_ctr, _lbl_fire_dir, _lbl_fire_flags,
+                _lbl_rec_path, _lbl_rec_dir, _lbl_rec_flags):
+        lbl.set_text("")
 
 
 def draw_maze(maze: list[list[MazeCell]], fire_cells: set[tuple[int, int]]):
@@ -304,10 +420,9 @@ if __name__ == "__main__":
         _run_generated_viewer(_args.seed, _args.size)
         sys.exit(0)
 
-    # agent = AStarAgent(
     hazard_testing: bool = True
     agent: Agent = AStarAgent()
-    mmAgent: ManualMovementAgent | None = agent if hazard_testing else None 
+    mmAgent: ManualMovementAgent | None = agent if hazard_testing else None
     env = AStarMazeEnvironment("manual_hazards" if hazard_testing else "training")
 
     start_pos = env.reset()
@@ -317,6 +432,7 @@ if __name__ == "__main__":
     step_count = 0
     episode_count = 0
     episodes: list[dict] = []
+    last_actions: list[Action] = []
 
     pygame.time.set_timer(TICK_EVENT, 1000 // TICKS_PER_SECOND)
     running = True
@@ -335,12 +451,9 @@ if __name__ == "__main__":
             if event.type == TICK_EVENT:
                 for _ in range(STEPS_PER_TICK):
                     if not paused:
-                        actions = agent.plan_turn(last_result)
-
-                        last_result = env.step(actions)
+                        last_actions = agent.plan_turn(last_result)
+                        last_result = env.step(last_actions)
                         step_count += 1
-                        if step_count >= 24450 and step_count <= 24550:
-                            paused = True
                         if last_result.is_goal_reached or step_count >= MAX_STEPS_PER_EPISODE:
                             last_result, step_count = start_new_episode(env, agent, episodes)
                             episode_count += 1
@@ -349,16 +462,16 @@ if __name__ == "__main__":
                 if event.key == pygame.K_p:
                     paused = not paused
                 if event.key == pygame.K_t and paused:
-                    actions = agent.plan_turn(last_result)
-                    last_result = env.step(actions)
+                    last_actions = agent.plan_turn(last_result)
+                    last_result = env.step(last_actions)
                     step_count += 1
                     if last_result.is_goal_reached or step_count >= MAX_STEPS_PER_EPISODE:
                         last_result, step_count = start_new_episode(env, agent, episodes)
                         episode_count += 1
                 if event.key == pygame.K_y and paused:
                     for i in range(5):
-                        actions = agent.plan_turn(last_result)
-                        last_result = env.step(actions)
+                        last_actions = agent.plan_turn(last_result)
+                        last_result = env.step(last_actions)
                         step_count += 1
 
                 if hazard_testing:
@@ -371,9 +484,6 @@ if __name__ == "__main__":
                         mmAgent.set_action(Action.MOVE_UP)
                     elif event.key == pygame.K_DOWN:
                         mmAgent.set_action(Action.MOVE_DOWN)
-                    
-
-        
 
         keys = pygame.key.get_pressed()
         if keys[pygame.K_w]:
@@ -388,7 +498,6 @@ if __name__ == "__main__":
         screen.fill(BACKGROUND_COLOR)
 
         expanded = [pos for pos, cell in agent.memory.items() if cell.fully_expanded]
-
         color_cells(expanded, VISITED_COLOR)
         color_cells([cell.pos for cell in agent.open_queue], OPEN_QUEUE_COLOR)
         color_cells(agent.current_path, TRAVERSING_COLOR)
@@ -398,8 +507,8 @@ if __name__ == "__main__":
 
         draw_little_guy(last_result.current_position)
         draw_maze(env._graph, env._active_fire_cells())
-        draw_ui(agent, paused, episode_count, step_count)
-        
+        draw_ui(agent, last_result, last_actions, paused, episode_count, step_count)
+
         manager.update(time_delta)
         manager.draw_ui(screen)
         pygame.display.flip()

@@ -76,7 +76,7 @@ class MazeEnvironment:
 
 _MAZE_FILES = {
     'training': 'MAZE_1.png',
-    'manual_hazards': 'MAZE_2.png',
+    'manual_hazards': 'MAZE_1.png',
     'testing':  'MAZE_0.png',
 }
 
@@ -867,10 +867,17 @@ class AStarAgent(Agent):
                     # Discovered a teleporter — use actual position for new cell
                     teleport_dest = CellPosition(*last_result.current_position)
                     if teleport_dest not in self.memory:
-                        new_cell = AStarAgentMemoryCell(CellState.EMPTY, teleport_dest, self.expanding_cell)
+                        new_cell = AStarAgentMemoryCell(CellState.PURPLE_TELEPORT, teleport_dest, self.expanding_cell)
+                        # Mark fully expanded immediately and omit from the open queue.
+                        # Teleport pad cells can't be probe-and-returned from (their
+                        # neighbours' back-pointers are rewired to the paired pad), so
+                        # there's nothing useful to expand.  More critically, if the dest
+                        # were queued, _pop_and_traverse would select it right after the
+                        # successful return, build a 2-step path EC→dest (via MOVE_LEFT),
+                        # and the agent would step straight back onto the teleporter.
+                        new_cell.fully_expanded = True
                         self.memory[teleport_dest] = new_cell
                         self._register_neighbor(new_cell, self.expansion_state)
-                        heappush(self.open_queue, new_cell)
                     self._teleport_origin_dir = self.expansion_state
                     self._teleport_exit_tried = 0
                     self._teleport_stepping_back = False
@@ -918,6 +925,20 @@ class AStarAgent(Agent):
                         result = [Action.WAIT] * 5
                         self.fire_counter = (self.fire_counter + 1) % 4
                         return result
+
+            # If expanding_cell is a teleport pad, the probe-and-return cycle
+            # is broken: every return step from a probed neighbor is rewired by
+            # the graph to land on the *paired* pad instead of back here,
+            # which the teleport-discovered handler would misinterpret as a new
+            # teleporter found by the probe.  Skip expansion entirely; the
+            # pad's surroundings will be discovered when adjacent cells are
+            # expanded via other paths.
+            if (self.expansion_state == AStarAgentExpansionState.NOT_EXPANDING
+                    and self.expanding_cell.state in _TELEPORT_STATES):
+                self.expanding_cell.fully_expanded = True
+                result = self._pop_and_traverse()
+                self.fire_counter = (self.fire_counter + 1) % 4
+                return result
 
             next_actions = self._expand(last_result)
             if self.expansion_state == AStarAgentExpansionState.NOT_EXPANDING:
